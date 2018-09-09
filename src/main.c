@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include "lib.h"
+#include "notify.h"
 #include <dlfcn.h>
+#include <jq.h>
 
 sigjmp_buf before = {0};
 
@@ -28,22 +30,35 @@ void loadlibfun()
     if(libtouse == 0)
     {
         libhandle = dlopen("./libfun1.so", RTLD_LAZY);
-        printf("loading libfun1.so\n");
-        libtouse=1;
+        printf("\e[1;32mloading libfun1.so\e[0m\n");
+        /*libtouse = 1;*/
     }
     else
     {
         libhandle = dlopen("./libfun2.so", RTLD_LAZY);
         printf("loading libfun2.so\n");
-        libtouse=0;
+        /*libtouse = 0;*/
     }
 
     lfun = dlsym(libhandle, "libfunc");
 }
 
+void build(const char* filename)
+{
+    system("make");
+    loadlibfun();
+}
 
 int main(int argc, char* argv[])
 {
+    initFileWatcher();
+    printf("starting\n");
+    build(0);
+    {
+        jq_state* jqs = jq_init();
+        jq_teardown(&jqs);
+    }
+    /*exit(0);*/
     srand(time(0));
     struct sigaction sa = {0};
     sigemptyset(&sa.sa_mask);
@@ -61,22 +76,15 @@ int main(int argc, char* argv[])
         printf("only if something goes wrong\n");
     }
 
+    watchFile("../src/lib1.c", build);
+
     while(1)
     {
+        watchChanges();
+
         if(setjmp(before) == 0)
         {
             lfun();
-            int r = rand() % 50;
-
-            if(r == 0)
-            {
-                int* i = 0;
-                *i = 1;
-            }
-            else
-            {
-                printf("rand %i\n", r);
-            }
         }
         else
         {
@@ -100,5 +108,6 @@ int main(int argc, char* argv[])
     }
 
     printf("exiting now");
+    destroyFileWatcher();
     return 0;
 }
